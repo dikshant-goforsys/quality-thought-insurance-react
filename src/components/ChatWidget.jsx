@@ -34,6 +34,7 @@ export default function ChatWidget() {
   const [sendError, setSendError] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [shortcutHint, setShortcutHint] = useState("");
 
   const boxRef = useRef(null);
   const listRef = useRef(null);
@@ -64,6 +65,24 @@ export default function ChatWidget() {
     return () => document.removeEventListener("click", onClick);
   }, [open]);
 
+  // Determine platform-specific shortcut hint (hide on touch/mobile)
+  useEffect(() => {
+    try {
+      const nav = window.navigator || {};
+      const ua = (nav.userAgent || "").toLowerCase();
+      const platform = (nav.platform || "").toLowerCase();
+      const hasTouch = (nav.maxTouchPoints || 0) > 0 || /mobi|android|iphone|ipad|ipod/.test(ua);
+      if (hasTouch) {
+        setShortcutHint("");
+        return;
+      }
+      const isMac = /mac/.test(platform) || /mac os x|macintosh/.test(ua);
+      setShortcutHint(isMac ? "⌘ + Enter" : "Ctrl + Enter");
+    } catch {
+      setShortcutHint("");
+    }
+  }, []);
+
   // Poll when open
   useEffect(() => {
     if (!open) {
@@ -73,7 +92,7 @@ export default function ChatWidget() {
     }
     // initial fetch
     void fetchList();
-    pollRef.current = setInterval(fetchList, POLL_MS);
+    // pollRef.current = setInterval(fetchList, POLL_MS);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
@@ -107,6 +126,7 @@ export default function ChatWidget() {
   }
 
   async function onSend(e) {
+    console.log("onSend", e);
     e.preventDefault();
     if (sending) return;
     const text = (inputRef.current?.value || "").trim();
@@ -146,6 +166,13 @@ export default function ChatWidget() {
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
   }
 
+  function handleKeyDown(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      onSend(e);
+    }
+  }
+
   return (
     <>
       {/* Floating Toggle */}
@@ -176,6 +203,9 @@ export default function ChatWidget() {
         aria-hidden={!open}
         role="dialog"
         aria-label="Agent chat"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
         className={[
           "fixed z-50 bottom-4 right-4 md:w-96 w-[calc(100%-1.5rem)] md:max-h-[70vh] max-h-[85vh]",
           "shadow-2xl rounded-2xl overflow-hidden border bg-white",
@@ -218,10 +248,10 @@ export default function ChatWidget() {
               const isUser = (msg.sender || "").toLowerCase() === "user";
               return (
                 <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                  <div className="flex flex-col">
+                  <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
                     <div
                       className={[
-                        "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                        "max-w-[80%] w-fit rounded-2xl px-3 py-2 text-sm shadow-sm",
                         isUser ? "bg-brand-600 text-white" : "bg-white border text-gray-800",
                       ].join(" ")}
                     >
@@ -247,18 +277,26 @@ export default function ChatWidget() {
               rows={1}
               placeholder="Type your message…"
               onInput={autoResizeTextArea}
+              onKeyDown={handleKeyDown}
               className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-600"
             />
             <button
-              type="submit"
-              disabled={sending}
-              className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-white hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
-              Send
+                type="submit"
+                disabled={sending}
+                onClick={onSend}
+                className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-white hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+                Send
             </button>
+        
+          </div>
+          <div className="text-end">
+          {shortcutHint && (
+            <span className="text-xs text-gray-500">{shortcutHint} to send</span>
+          )}
           </div>
           {!!sendError && (
             <p className="mt-2 text-xs text-red-600">{sendError}</p>
